@@ -25,10 +25,10 @@ UKF::UKF() {
   P_ = MatrixXd(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 3;
+  std_a_ = 2;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = M_PI/8.0;
+  std_yawdd_ = 0.3;
 
   // Laser measurement noise standard deviation position1 in m
   std_laspx_ = 0.15;
@@ -90,6 +90,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     }
   } else {
     time_us_ = meas_package.timestamp_;
+    P_ = MatrixXd::Identity(5,5);
     if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
       float px = meas_package.raw_measurements_[0];
       float py = meas_package.raw_measurements_[1];
@@ -98,7 +99,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
       float rho = meas_package.raw_measurements_[0];
       float phi = meas_package.raw_measurements_[1];
       float rho_dot = meas_package.raw_measurements_[2];
-      x_ << rho*cos(phi), rho*sin(phi), 0, 0;
+      x_ << rho*cos(phi), rho*sin(phi), 0, 0, 0;
     }
     is_initialized_ = true;
   }
@@ -181,6 +182,7 @@ void UKF::Prediction(double delta_t) {
   P_ = (Xdiff.array().rowwise() * weights_.transpose().array()).matrix() * Xdiff.transpose();
 }
 
+
 /**
  * Updates the state and the state covariance matrix using a laser measurement.
  * @param {MeasurementPackage} meas_package
@@ -207,14 +209,17 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   Tools tools;
   VectorXd y = z - H*x_;
   MatrixXd PHt = P_*H.transpose();
-  MatrixXd S = H*PHt + R;
-  MatrixXd K = PHt*S.inverse();
+  MatrixXd Sinv = (H*PHt + R).inverse();
+  MatrixXd K = PHt*Sinv;
   const long x_size = x_.size();
   MatrixXd I = MatrixXd::Identity(x_size, x_size);
 
   x_ = x_ + K*y;
   P_ = (I - K*H) * P_;
+
+  NIS_laser_ = y.transpose() * Sinv * y;
 }
+
 
 /**
  * Updates the state and the state covariance matrix using a radar measurement.
@@ -278,9 +283,12 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   MatrixXd Xdiff_weighted = Xdiff.array().rowwise() * weights_.transpose().array();
   MatrixXd Tc = Xdiff_weighted * Zdiff.transpose();
 
-  MatrixXd K = Tc * S.inverse();
+  MatrixXd Sinv = S.inverse();
+  MatrixXd K = Tc * Sinv;
   VectorXd y = (z - z_pred);
   y[1] = tools.NormalizeAngle(y[1]);
   x_ = x_ + K * y;
   P_ = P_ - K * S * K.transpose();
+
+  NIS_radar_ = y.transpose() * Sinv * y;
 }
