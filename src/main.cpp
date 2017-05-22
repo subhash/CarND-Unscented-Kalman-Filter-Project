@@ -50,6 +50,17 @@ void check_files(ifstream& in_file, string& in_name,
   }
 }
 
+using Eigen::VectorXd;
+
+int main2(int argc, char* argv[]) {
+  VectorXd x = VectorXd(4), y = VectorXd(4);
+  x << 1,2,3,4;
+  y << 2,3,4,5;
+  VectorXd z = x-y;
+  cout << "finally - " << (z.array()*z.array()).mean() << endl;
+  return 0;
+}
+
 int main(int argc, char* argv[]) {
 
   check_arguments(argc, argv);
